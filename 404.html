@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SessionBox Dashboard</title>
+  <script>
+    // Redirect 404s back to index for SPA routing
+    const s = window.location.search;
+    const q = s.slice(1).split("&").filter(Boolean);
+    const path = window.location.pathname.slice(1);
+    if (path) {
+      window.location.replace(
+        window.location.origin + "/?/" + path + (q.length ? "&" + q.join("&") : "")
+      );
+    } else {
+      window.location.replace(window.location.origin + "/");
+    }
+  </script>
+</head>
+<body></body>
+</html>

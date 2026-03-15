@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SessionBox Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #111118;
+      --card:      #16161f;
+      --border:    #1e1e2e;
+      --accent:    #6c63ff;
+      --accent2:   #ff6584;
+      --accent3:   #43e97b;
+      --text:      #e8e8f0;
+      --muted:     #5a5a7a;
+      --mono:      'Space Mono', monospace;
+      --sans:      'DM Sans', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Grid Background ─────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(108,99,255,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(108,99,255,.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Auth Screen ─────────────────────────────────── */
+    #auth-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .auth-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 52px 48px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      animation: slideUp .5s ease both;
+    }
+
+    .auth-card::before {
+      content: '';
+      position: absolute;
+      top: -80px; left: 50%;
+      transform: translateX(-50%);
+      width: 260px; height: 260px;
+      background: radial-gradient(circle, rgba(108,99,255,.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .logo-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .logo-icon {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+
+    .logo-text {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-text span { color: var(--accent); }
+
+    .auth-headline {
+      font-size: 26px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+
+    .auth-sub {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 36px;
+      line-height: 1.6;
+    }
+
+    .google-btn {
+      width: 100%;
+      padding: 14px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      transition: all .2s;
+    }
+
+    .google-btn:hover {
+      background: var(--border);
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .google-btn svg { flex-shrink: 0; }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 24px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1;
+      height: 1px; background: var(--border);
+    }
+
+    .guest-btn {
+      width: 100%;
+      padding: 13px 20px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .guest-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ── Main App ─────────────────────────────────────── */
+    #app-screen {
+      display: none;
+      min-height: 100vh;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Top Nav ─────────────────────────────────────── */
+    .topnav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10,10,15,.85);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--mono);
+      font-size: 15px; font-weight: 700;
+    }
+
+    .nav-logo-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: pulse 2s ease infinite;
+    }
+
+    .nav-right {
+      display: flex; align-items: center; gap: 12px;
+    }
+
+    .user-chip {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 6px 14px 6px 6px;
+      font-size: 13px;
+    }
+
+    .user-avatar {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+      overflow: hidden;
+    }
+
+    .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .sync-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-family: var(--mono);
+    }
+
+    .sync-badge.online {
+      background: rgba(67,233,123,.12);
+      color: var(--accent3);
+      border: 1px solid rgba(67,233,123,.25);
+    }
+
+    .sync-badge.offline {
+      background: rgba(255,101,132,.12);
+      color: var(--accent2);
+      border: 1px solid rgba(255,101,132,.25);
+    }
+
+    .icon-btn {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .2s;
+      font-size: 16px;
+    }
+    .icon-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ── Main Content ─────────────────────────────────── */
+    .main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 32px;
+    }
+
+    /* ── Stats Row ────────────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 22px;
+      animation: slideUp .4s ease both;
+    }
+
+    .stat-card:nth-child(1) { animation-delay: .05s; }
+    .stat-card:nth-child(2) { animation-delay: .10s; }
+    .stat-card:nth-child(3) { animation-delay: .15s; }
+    .stat-card:nth-child(4) { animation-delay: .20s; }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 30px;
+      font-weight: 600;
+      font-family: var(--mono);
+      line-height: 1;
+    }
+
+    .stat-value.purple { color: var(--accent); }
+    .stat-value.pink   { color: var(--accent2); }
+    .stat-value.green  { color: var(--accent3); }
+
+    /* ── Section Header ───────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-family: var(--mono);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 3px; height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .action-row {
+      display: flex; gap: 10px; flex-wrap: wrap;
+    }
+
+    /* ── Buttons ──────────────────────────────────────── */
+    .btn {
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all .2s;
+      display: inline-flex; align-items: center; gap: 7px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: #7c74ff; transform: translateY(-1px); }
+
+    .btn-ghost {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { border-color: var(--accent); }
+
+    .btn-danger {
+      background: rgba(255,101,132,.12);
+      color: var(--accent2);
+      border: 1px solid rgba(255,101,132,.25);
+    }
+    .btn-danger:hover { background: rgba(255,101,132,.2); }
+
+    /* ── Sessions Grid ────────────────────────────────── */
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .session-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all .2s;
+      animation: slideUp .4s ease both;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .session-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--session-color, var(--accent));
+      opacity: .7;
+    }
+
+    .session-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(108,99,255,.12);
+    }
+
+    .session-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .session-color-dot {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: var(--session-color, var(--accent));
+      opacity: .85;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+
+    .session-actions {
+      display: flex; gap: 6px;
+      opacity: 0;
+      transition: opacity .15s;
+    }
+
+    .session-card:hover .session-actions { opacity: 1; }
+
+    .session-action-btn {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      transition: all .15s;
+    }
+
+    .session-action-btn:hover { color: var(--text); border-color: var(--muted); }
+    .session-action-btn.del:hover { color: var(--accent2); border-color: var(--accent2); }
+
+    .session-name {
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-url {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .session-tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    .tag-local {
+      background: rgba(255,101,132,.1);
+      color: var(--accent2);
+      border: 1px solid rgba(255,101,132,.2);
+    }
+
+    .tag-synced {
+      background: rgba(67,233,123,.1);
+      color: var(--accent3);
+      border: 1px solid rgba(67,233,123,.2);
+    }
+
+    .session-date {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* ── Empty State ──────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--muted);
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: .4;
+    }
+
+    .empty-title {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .empty-sub { font-size: 14px; line-height: 1.6; }
+
+    /* ── Modal ────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.7);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      width: 100%;
+      max-width: 480px;
+      transform: translateY(16px);
+      transition: transform .25s ease;
+    }
+
+    .modal-overlay.open .modal { transform: translateY(0); }
+
+    .modal-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .form-group { margin-bottom: 18px; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    input:focus, select:focus { border-color: var(--accent); }
+    input::placeholder { color: var(--muted); }
+
+    .color-row {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+
+    .color-swatch {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all .15s;
+    }
+
+    .color-swatch.active {
+      border-color: white;
+      transform: scale(1.15);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+
+    /* ── Toast ────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 32px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 999;
+      transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+      white-space: nowrap;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.success { border-color: rgba(67,233,123,.4); color: var(--accent3); }
+    #toast.error   { border-color: rgba(255,101,132,.4); color: var(--accent2); }
+
+    /* ── Animations ───────────────────────────────────── */
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .4; }
+    }
+
+    /* ── Tabs ─────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 28px;
+    }
+
+    .tab {
+      padding: 8px 18px;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all .2s;
+      border: none;
+      background: none;
+      font-family: var(--sans);
+    }
+
+    .tab.active {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Import/Export ────────────────────────────────── */
+    .io-area {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px;
+    }
+
+    .io-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .io-desc {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .file-drop {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 36px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      margin-bottom: 16px;
+    }
+
+    .file-drop:hover, .file-drop.drag { border-color: var(--accent); background: rgba(108,99,255,.04); }
+    .file-drop-icon { font-size: 28px; margin-bottom: 10px; }
+    .file-drop-text { font-size: 13px; color: var(--muted); }
+    .file-drop-text strong { color: var(--text); }
+
+    /* ── Settings ─────────────────────────────────────── */
+    .settings-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .settings-title {
+      font-family: var(--mono);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .setting-row:last-child { border-bottom: none; }
+
+    .setting-info { flex: 1; }
+    .setting-name { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
+    .setting-desc { font-size: 12px; color: var(--muted); }
+
+    .toggle {
+      width: 40px; height: 22px;
+      background: var(--border);
+      border-radius: 100px;
+      cursor: pointer;
+      position: relative;
+      transition: background .2s;
+      border: none;
+      flex-shrink: 0;
+      margin-left: 16px;
+    }
+
+    .toggle.on { background: var(--accent); }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: white;
+      transition: transform .2s;
+    }
+
+    .toggle.on::after { transform: translateX(18px); }
+
+    /* ── Scrollbar ────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Responsive ───────────────────────────────────── */
+    @media (max-width: 640px) {
+      .topnav { padding: 12px 16px; }
+      .main { padding: 24px 16px; }
+      .auth-card { padding: 36px 24px; }
+      .sessions-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Auth Screen ─────────────────────────────────────────────────── -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="logo-mark">
+      <div class="logo-icon">📦</div>
+      <div class="logo-text">Session<span>Box</span></div>
+    </div>
+    <h1 class="auth-headline">Session Dashboard</h1>
+    <p class="auth-sub">Manage and sync your browser sessions across all devices. Sign in to enable cloud sync.</p>
+
+    <button class="google-btn" id="google-signin-btn">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 6.293C4.672 4.166 6.656 3.58 9 3.58z"/></svg>
+      Continue with Google
+    </button>
+
+    <div class="divider">or</div>
+
+    <button class="guest-btn" id="guest-btn">
+      Continue without account (local only)
+    </button>
+  </div>
+</div>
+
+<!-- ── App Screen ──────────────────────────────────────────────────── -->
+<div id="app-screen">
+
+  <!-- Nav -->
+  <nav class="topnav">
+    <div class="nav-logo">
+      <div class="nav-logo-dot"></div>
+      SessionBox Dashboard
+    </div>
+    <div class="nav-right">
+      <span class="sync-badge" id="sync-badge">⬤ local</span>
+      <div class="user-chip" id="user-chip">
+        <div class="user-avatar" id="user-avatar">G</div>
+        <span id="user-name-display">Guest</span>
+      </div>
+      <button class="icon-btn" id="signout-btn" title="Sign out">↩</button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Stats -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Sessions</div>
+        <div class="stat-value purple" id="stat-total">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Synced</div>
+        <div class="stat-value green" id="stat-synced">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Local Only</div>
+        <div class="stat-value pink" id="stat-local">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Last Sync</div>
+        <div class="stat-value" id="stat-lastsync" style="font-size:16px;color:var(--muted)">—</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="sessions">📦 Sessions</button>
+      <button class="tab" data-tab="export">⬆ Import / Export</button>
+      <button class="tab" data-tab="settings">⚙ Settings</button>
+    </div>
+
+    <!-- Sessions Tab -->
+    <div id="tab-sessions">
+      <div class="section-header">
+        <div class="section-title">Your Sessions</div>
+        <div class="action-row">
+          <button class="btn btn-ghost" id="sync-now-btn">↻ Sync Now</button>
+          <button class="btn btn-primary" id="new-session-btn">+ New Session</button>
+        </div>
+      </div>
+      <div class="sessions-grid" id="sessions-grid">
+        <div class="empty-state" style="grid-column:1/-1">
+          <div class="empty-icon">📭</div>
+          <div class="empty-title">No sessions yet</div>
+          <div class="empty-sub">Create a session to get started.<br>Sessions let you log in to the same site with multiple accounts.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import/Export Tab -->
+    <div id="tab-export" style="display:none">
+      <div style="display:grid;gap:16px">
+
+        <div class="io-area">
+          <div class="io-title">⬇ Export Sessions</div>
+          <div class="io-desc">Download all your sessions as a JSON file. You can re-import this later or use it as a backup.</div>
+          <button class="btn btn-primary" id="export-btn">Download sessions.json</button>
+        </div>
+
+        <div class="io-area">
+          <div class="io-title">⬆ Import Sessions</div>
+          <div class="io-desc">Import a previously exported sessions.json file. Existing sessions with the same ID will be updated.</div>
+          <div class="file-drop" id="file-drop">
+            <div class="file-drop-icon">📂</div>
+            <div class="file-drop-text"><strong>Drop file here</strong> or click to browse</div>
+          </div>
+          <input type="file" id="file-input" accept=".json" style="display:none">
+          <button class="btn btn-ghost" id="import-confirm-btn" style="display:none">Import loaded file</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="tab-settings" style="display:none">
+
+      <div class="settings-section">
+        <div class="settings-title">Sync</div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Auto-sync on changes</div>
+            <div class="setting-desc">Automatically push session changes to cloud when signed in</div>
+          </div>
+          <button class="toggle on" id="toggle-autosync"></button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Keep local copy</div>
+            <div class="setting-desc">Always save a local backup even when cloud sync is on</div>
+          </div>
+          <button class="toggle on" id="toggle-local-backup"></button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-title">Account</div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Signed in as</div>
+            <div class="setting-desc" id="account-email-display">—</div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Sign out</div>
+            <div class="setting-desc">You'll lose cloud sync until you sign back in</div>
+          </div>
+          <button class="btn btn-danger" id="settings-signout-btn">Sign out</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-title">Danger Zone</div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Delete all sessions</div>
+            <div class="setting-desc">Permanently delete all sessions from cloud and local storage</div>
+          </div>
+          <button class="btn btn-danger" id="delete-all-btn">Delete all</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app-screen -->
+
+<!-- ── New/Edit Session Modal ──────────────────────────────────────── -->
+<div class="modal-overlay" id="session-modal">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modal-icon">📦</span>
+      <span id="modal-title-text">New Session</span>
+    </div>
+
+    <div class="form-group">
+      <label>Session Name</label>
+      <input type="text" id="session-name-input" placeholder="e.g. Work Account, Personal" />
+    </div>
+
+    <div class="form-group">
+      <label>URL (optional)</label>
+      <input type="text" id="session-url-input" placeholder="e.g. gmail.com" />
+    </div>
+
+    <div class="form-group">
+      <label>Color</label>
+      <div class="color-row" id="color-row"></div>
+    </div>
+
+    <div class="form-group">
+      <label>Storage</label>
+      <select id="session-storage-select">
+        <option value="synced">☁ Synced (cloud + local)</option>
+        <option value="local">📱 Local only</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel-btn">Cancel</button>
+      <button class="btn btn-primary" id="modal-save-btn">Save Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ───────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<!-- ── Firebase SDK ────────────────────────────────────────────────── -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, writeBatch, query, where, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ── Firebase Config ────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyAR-ZpJ4QR4AytJyWdGo2VJvKZWL4tGM-s",
+  authDomain: "vidstore-9e9c2.firebaseapp.com",
+  projectId: "vidstore-9e9c2",
+  storageBucket: "vidstore-9e9c2.firebasestorage.app",
+  messagingSenderId: "382120986454",
+  appId: "1:382120986454:web:401056193538bd6fd7b8f7",
+  measurementId: "G-JV7LVE4Y2V"
+};
+
+const app      = initializeApp(firebaseConfig);
+const auth     = getAuth(app);
+const db       = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+// ── State ──────────────────────────────────────────────────────────
+let currentUser  = null;
+let sessions     = [];   // [{id, name, url, color, storage, createdAt, updatedAt}]
+let editingId    = null;
+let importBuffer = null;
+let settings_state = {
+  autoSync: true,
+  localBackup: true,
+};
+
+const COLORS = [
+  "#6c63ff","#ff6584","#43e97b","#f7971e",
+  "#4facfe","#fa709a","#a18cd1","#ffecd2",
+  "#84fab0","#f093fb","#fda085","#667eea",
+];
+
+// ── Local Storage Helpers ──────────────────────────────────────────
+const LS_KEY      = "sb_sessions";
+const LS_SETTINGS = "sb_settings";
+
+function lsLoad() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function lsSave(data) {
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+}
+
+function settingsLoad() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_SETTINGS) || "{}");
+    return { ...settings_state, ...s };
+  } catch { return settings_state; }
+}
+
+function settingsSave(s) {
+  localStorage.setItem(LS_SETTINGS, JSON.stringify(s));
+}
+
+// ── Firestore Helpers ──────────────────────────────────────────────
+async function fsGetSessions(uid) {
+  const snap = await getDocs(collection(db, "users", uid, "sessions"));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function fsSaveSession(uid, session) {
+  await setDoc(doc(db, "users", uid, "sessions", session.id), {
+    ...session,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function fsDeleteSession(uid, sessionId) {
+  await deleteDoc(doc(db, "users", uid, "sessions", sessionId));
+}
+
+async function fsDeleteAll(uid) {
+  const snap = await getDocs(collection(db, "users", uid, "sessions"));
+  const batch = writeBatch(db);
+  snap.docs.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+}
+
+// ── Sync ───────────────────────────────────────────────────────────
+async function syncDown() {
+  if (!currentUser) return;
+  try {
+    const cloud = await fsGetSessions(currentUser.uid);
+    // Merge: cloud is source of truth; keep local-only sessions
+    const localOnly = sessions.filter(s => s.storage === "local");
+    sessions = [...cloud, ...localOnly.filter(lo => !cloud.find(c => c.id === lo.id))];
+    if (settings_state.localBackup) lsSave(sessions);
+    updateStats();
+    renderSessions();
+    updateLastSync();
+    toast("✓ Synced from cloud", "success");
+  } catch (e) {
+    toast("Sync failed: " + e.message, "error");
+  }
+}
+
+async function syncUp(session) {
+  if (!currentUser || session.storage === "local") return;
+  try {
+    await fsSaveSession(currentUser.uid, session);
+  } catch (e) {
+    console.warn("Sync up failed:", e);
+  }
+}
+
+function updateLastSync() {
+  document.getElementById("stat-lastsync").textContent =
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// ── Auth ───────────────────────────────────────────────────────────
+document.getElementById("google-signin-btn").onclick = async () => {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    toast("Sign-in failed: " + e.message, "error");
+  }
+};
+
+document.getElementById("guest-btn").onclick = () => {
+  currentUser = null;
+  sessions = lsLoad();
+  showApp(null);
+};
+
+document.getElementById("signout-btn").onclick = signOutUser;
+document.getElementById("settings-signout-btn").onclick = signOutUser;
+
+async function signOutUser() {
+  if (currentUser && auth.currentUser) await signOut(auth);
+  currentUser = null;
+  sessions = [];
+  showAuth();
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    currentUser = user;
+    sessions = lsLoad(); // Load local first for instant render
+    showApp(user);
+    await syncDown();    // Then pull from cloud
+  }
+});
+
+// ── UI Switching ───────────────────────────────────────────────────
+function showAuth() {
+  document.getElementById("auth-screen").style.display = "flex";
+  document.getElementById("app-screen").style.display = "none";
+}
+
+function showApp(user) {
+  document.getElementById("auth-screen").style.display = "none";
+  document.getElementById("app-screen").style.display = "block";
+  settings_state = settingsLoad();
+  applySettings();
+
+  if (user) {
+    document.getElementById("user-name-display").textContent =
+      user.displayName?.split(" ")[0] || user.email;
+    const av = document.getElementById("user-avatar");
+    if (user.photoURL) {
+      av.innerHTML = `<img src="${user.photoURL}" />`;
+    } else {
+      av.textContent = (user.displayName || user.email || "U")[0].toUpperCase();
+    }
+    document.getElementById("account-email-display").textContent = user.email;
+    const badge = document.getElementById("sync-badge");
+    badge.textContent = "⬤ synced";
+    badge.className = "sync-badge online";
+  } else {
+    document.getElementById("user-name-display").textContent = "Guest";
+    document.getElementById("account-email-display").textContent = "Not signed in";
+    const badge = document.getElementById("sync-badge");
+    badge.textContent = "⬤ local";
+    badge.className = "sync-badge offline";
+  }
+
+  updateStats();
+  renderSessions();
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    ["sessions", "export", "settings"].forEach(name => {
+      document.getElementById("tab-" + name).style.display =
+        name === tab.dataset.tab ? "block" : "none";
+    });
+  };
+});
+
+// ── Stats ──────────────────────────────────────────────────────────
+function updateStats() {
+  const synced = sessions.filter(s => s.storage !== "local").length;
+  const local  = sessions.filter(s => s.storage === "local").length;
+  document.getElementById("stat-total").textContent  = sessions.length;
+  document.getElementById("stat-synced").textContent = synced;
+  document.getElementById("stat-local").textContent  = local;
+}
+
+// ── Render Sessions ────────────────────────────────────────────────
+function renderSessions() {
+  const grid = document.getElementById("sessions-grid");
+  if (!sessions.length) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">📭</div>
+        <div class="empty-title">No sessions yet</div>
+        <div class="empty-sub">Create a session to get started.</div>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = sessions.map((s, i) => `
+    <div class="session-card" style="--session-color:${s.color||"var(--accent)"}; animation-delay:${i * 0.04}s">
+      <div class="session-top">
+        <div class="session-color-dot" style="background:${s.color||"var(--accent)"}">
+          ${s.url ? "🌐" : "📦"}
+        </div>
+        <div class="session-actions">
+          <button class="session-action-btn" onclick="editSession('${s.id}')" title="Edit">✏</button>
+          <button class="session-action-btn del" onclick="deleteSession('${s.id}')" title="Delete">✕</button>
+        </div>
+      </div>
+      <div class="session-name">${esc(s.name)}</div>
+      <div class="session-url">${s.url ? esc(s.url) : "No URL set"}</div>
+      <div class="session-meta">
+        <span class="session-tag ${s.storage === "local" ? "tag-local" : "tag-synced"}">
+          ${s.storage === "local" ? "local" : "synced"}
+        </span>
+        <span class="session-date">${formatDate(s.createdAt)}</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+function esc(str) {
+  const d = document.createElement("div");
+  d.textContent = str || "";
+  return d.innerHTML;
+}
+
+function formatDate(ts) {
+  if (!ts) return "—";
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+// ── New Session Modal ──────────────────────────────────────────────
+const modal        = document.getElementById("session-modal");
+const nameInput    = document.getElementById("session-name-input");
+const urlInput     = document.getElementById("session-url-input");
+const storageSelect = document.getElementById("session-storage-select");
+
+document.getElementById("new-session-btn").onclick = () => openModal();
+document.getElementById("modal-cancel-btn").onclick = closeModal;
+document.getElementById("modal-save-btn").onclick   = saveSession;
+
+modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+
+let selectedColor = COLORS[0];
+
+function buildColorPicker() {
+  const row = document.getElementById("color-row");
+  row.innerHTML = COLORS.map(c => `
+    <div class="color-swatch ${c === selectedColor ? "active" : ""}"
+         style="background:${c}"
+         data-color="${c}"
+         onclick="selectColor(this, '${c}')"></div>
+  `).join("");
+}
+
+window.selectColor = (el, color) => {
+  selectedColor = color;
+  document.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("active"));
+  el.classList.add("active");
+};
+
+function openModal(session = null) {
+  editingId = session?.id || null;
+  nameInput.value    = session?.name || "";
+  urlInput.value     = session?.url  || "";
+  selectedColor      = session?.color || COLORS[0];
+  storageSelect.value = session?.storage || (currentUser ? "synced" : "local");
+  if (!currentUser) {
+    storageSelect.querySelector('[value="synced"]').disabled = true;
+    storageSelect.value = "local";
+  } else {
+    storageSelect.querySelector('[value="synced"]').disabled = false;
+  }
+  document.getElementById("modal-title-text").textContent = session ? "Edit Session" : "New Session";
+  document.getElementById("modal-icon").textContent = session ? "✏" : "📦";
+  buildColorPicker();
+  modal.classList.add("open");
+  setTimeout(() => nameInput.focus(), 100);
+}
+
+function closeModal() {
+  modal.classList.remove("open");
+  editingId = null;
+}
+
+async function saveSession() {
+  const name = nameInput.value.trim();
+  if (!name) { toast("Session name required", "error"); return; }
+
+  const session = {
+    id:        editingId || "sb_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+    name,
+    url:       urlInput.value.trim(),
+    color:     selectedColor,
+    storage:   storageSelect.value,
+    createdAt: editingId ? (sessions.find(s => s.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (editingId) {
+    sessions = sessions.map(s => s.id === editingId ? session : s);
+  } else {
+    sessions = [session, ...sessions];
+  }
+
+  if (settings_state.localBackup || session.storage === "local") lsSave(sessions);
+  if (settings_state.autoSync && currentUser && session.storage !== "local") {
+    try { await syncUp(session); }
+    catch (e) { toast("Cloud save failed: " + e.message, "error"); }
+  }
+
+  updateStats();
+  renderSessions();
+  closeModal();
+  toast(editingId ? "Session updated" : "Session created", "success");
+}
+
+window.editSession = (id) => {
+  const s = sessions.find(s => s.id === id);
+  if (s) openModal(s);
+};
+
+window.deleteSession = async (id) => {
+  if (!confirm("Delete this session?")) return;
+  const s = sessions.find(s => s.id === id);
+  sessions = sessions.filter(s => s.id !== id);
+  lsSave(sessions);
+  if (currentUser && s?.storage !== "local") {
+    try { await fsDeleteSession(currentUser.uid, id); }
+    catch (e) { console.warn("Cloud delete failed:", e); }
+  }
+  updateStats();
+  renderSessions();
+  toast("Session deleted", "success");
+};
+
+// ── Sync Now button ────────────────────────────────────────────────
+document.getElementById("sync-now-btn").onclick = async () => {
+  if (!currentUser) { toast("Sign in to sync", "error"); return; }
+  await syncDown();
+};
+
+// ── Export ─────────────────────────────────────────────────────────
+document.getElementById("export-btn").onclick = () => {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    sessions,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = "sessionbox-sessions.json";
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("Exported " + sessions.length + " sessions", "success");
+};
+
+// ── Import ─────────────────────────────────────────────────────────
+const fileDrop  = document.getElementById("file-drop");
+const fileInput = document.getElementById("file-input");
+
+fileDrop.onclick = () => fileInput.click();
+
+fileDrop.ondragover = (e) => { e.preventDefault(); fileDrop.classList.add("drag"); };
+fileDrop.ondragleave = () => fileDrop.classList.remove("drag");
+fileDrop.ondrop = (e) => {
+  e.preventDefault();
+  fileDrop.classList.remove("drag");
+  const file = e.dataTransfer.files[0];
+  if (file) handleImportFile(file);
+};
+
+fileInput.onchange = () => {
+  if (fileInput.files[0]) handleImportFile(fileInput.files[0]);
+};
+
+function handleImportFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      importBuffer = Array.isArray(data) ? data : (data.sessions || []);
+      fileDrop.querySelector(".file-drop-text").innerHTML =
+        `<strong>${file.name}</strong> — ${importBuffer.length} sessions ready`;
+      document.getElementById("import-confirm-btn").style.display = "inline-flex";
+    } catch {
+      toast("Invalid JSON file", "error");
+    }
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById("import-confirm-btn").onclick = async () => {
+  if (!importBuffer) return;
+  let added = 0;
+  for (const s of importBuffer) {
+    if (!sessions.find(e => e.id === s.id)) {
+      sessions.push(s);
+      added++;
+    }
+  }
+  lsSave(sessions);
+  if (currentUser && settings_state.autoSync) {
+    for (const s of importBuffer) {
+      if (s.storage !== "local") {
+        try { await syncUp(s); } catch {}
+      }
+    }
+  }
+  updateStats();
+  renderSessions();
+  toast("Imported " + added + " new sessions", "success");
+  importBuffer = null;
+  document.getElementById("import-confirm-btn").style.display = "none";
+};
+
+// ── Settings ───────────────────────────────────────────────────────
+function applySettings() {
+  document.getElementById("toggle-autosync").className  = "toggle " + (settings_state.autoSync     ? "on" : "");
+  document.getElementById("toggle-local-backup").className = "toggle " + (settings_state.localBackup ? "on" : "");
+}
+
+document.getElementById("toggle-autosync").onclick = () => {
+  settings_state.autoSync = !settings_state.autoSync;
+  settingsSave(settings_state);
+  applySettings();
+};
+
+document.getElementById("toggle-local-backup").onclick = () => {
+  settings_state.localBackup = !settings_state.localBackup;
+  settingsSave(settings_state);
+  applySettings();
+};
+
+document.getElementById("delete-all-btn").onclick = async () => {
+  if (!confirm("Delete ALL sessions? This cannot be undone.")) return;
+  sessions = [];
+  lsSave([]);
+  if (currentUser) {
+    try { await fsDeleteAll(currentUser.uid); }
+    catch (e) { toast("Cloud delete failed: " + e.message, "error"); }
+  }
+  updateStats();
+  renderSessions();
+  toast("All sessions deleted", "success");
+};
+
+// ── Toast ──────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = "") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "show " + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = type; }, 2800);
+}
+
+</script>
+</body>
+</html>
