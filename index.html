@@ -871,7 +871,13 @@
         <div class="empty-state" style="grid-column:1/-1">
           <div class="empty-icon">📭</div>
           <div class="empty-title">No sessions yet</div>
-          <div class="empty-sub">Create a session to get started.<br>Sessions let you log in to the same site with multiple accounts.</div>
+          <div class="empty-sub">
+            Sessions you create in the <strong>SessionBox extension</strong> will appear here after syncing.<br><br>
+            To see your extension sessions here:<br>
+            1. Sign in with Google in the extension (Account → Sign in with Google)<br>
+            2. Click <strong>Sync Now</strong> above<br><br>
+            Or create a new session with the button above.
+          </div>
         </div>
       </div>
     </div>
@@ -1060,12 +1066,47 @@ function settingsSave(s) {
 }
 
 // ── Firestore Helpers ──────────────────────────────────────────────
+// ── Firestore helpers ─────────────────────────────────────────────
+// Primary path: users/{uid}/sessions/{id}  (dashboard-native)
+// Secondary path: sb_users_{uid}_private_sessions/{id}  (extension shim)
+
 async function fsGetSessions(uid) {
-  const snap = await getDocs(collection(db, "users", uid, "sessions"));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const results = [];
+  const seenIds = new Set();
+
+  // Read dashboard-native path
+  try {
+    const snap = await getDocs(collection(db, "users", uid, "sessions"));
+    snap.docs.forEach(d => {
+      const data = d.data();
+      const session = data._v || data; // shim wraps in _v
+      if (!seenIds.has(session.id || d.id)) {
+        seenIds.add(session.id || d.id);
+        results.push({ id: session.id || d.id, ...session });
+      }
+    });
+  } catch(e) { console.warn("Dashboard path read failed:", e.message); }
+
+  // Read extension shim path: collection name = "sb_users_UID_private_sessions"
+  const shimColl = `sb_users_${uid}_private_sessions`;
+  try {
+    const snap2 = await getDocs(collection(db, shimColl));
+    snap2.docs.forEach(d => {
+      const data = d.data();
+      const session = data._v || data;
+      const sid = session.id || d.id;
+      if (session && session.name && !seenIds.has(sid)) {
+        seenIds.add(sid);
+        results.push({ id: sid, ...session });
+      }
+    });
+  } catch(e) { console.warn("Shim path read failed:", e.message); }
+
+  return results;
 }
 
 async function fsSaveSession(uid, session) {
+  // Write to dashboard-native path
   await setDoc(doc(db, "users", uid, "sessions", session.id), {
     ...session,
     updatedAt: serverTimestamp(),
@@ -1074,6 +1115,10 @@ async function fsSaveSession(uid, session) {
 
 async function fsDeleteSession(uid, sessionId) {
   await deleteDoc(doc(db, "users", uid, "sessions", sessionId));
+  // Also try shim path
+  try {
+    await deleteDoc(doc(db, `sb_users_${uid}_private_sessions`, sessionId));
+  } catch {}
 }
 
 async function fsDeleteAll(uid) {
@@ -1097,7 +1142,11 @@ async function syncDown() {
     updateLastSync();
     toast("✓ Synced from cloud", "success");
   } catch (e) {
-    toast("Sync failed: " + e.message, "error");
+    if (e.message && e.message.includes("permissions")) {
+      toast("⚠ Firestore rules not set. See README for setup.", "error");
+    } else {
+      toast("Sync failed: " + e.message, "error");
+    }
   }
 }
 
@@ -1141,6 +1190,24 @@ async function signOutUser() {
 }
 
 onAuthStateChanged(auth, async (user) => {
+  // If guest, try to load sessions from extension via localStorage bridge key
+  if (!user) {
+    const extKey = "sb2_db_users___private_sessions__meta";
+    try {
+      const extData = localStorage.getItem(extKey);
+      if (extData) {
+        const parsed = JSON.parse(extData);
+        if (parsed && typeof parsed === "object") {
+          // Extension wrote sessions here via shim local storage
+          const extSessions = Object.values(parsed).filter(s => s && s.name);
+          if (extSessions.length > 0) {
+            sessions = extSessions;
+          }
+        }
+      }
+    } catch {}
+  }
+
   if (user) {
     currentUser = user;
     sessions = lsLoad(); // Load local first for instant render
