@@ -945,6 +945,26 @@
       </div>
 
       <div class="settings-section">
+        <div class="settings-title">Extension Connection</div>
+        <div class="setting-row" style="flex-direction:column; align-items:flex-start; gap:12px">
+          <div class="setting-info">
+            <div class="setting-name">Extension ID</div>
+            <div class="setting-desc">
+              Paste your SessionBox extension ID from <code style="background:#1e1e2e;padding:2px 6px;border-radius:4px;font-size:11px">edge://extensions</code> or <code style="background:#1e1e2e;padding:2px 6px;border-radius:4px;font-size:11px">chrome://extensions</code>.<br>
+              This lets the dashboard send your login token to the extension automatically.
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;width:100%">
+            <input type="text" id="ext-id-input" placeholder="e.g. abcdefghijklmnopqrstuvwxyzabcdef"
+              style="flex:1;font-family:monospace;font-size:12px"
+              value="" />
+            <button class="btn btn-primary" id="save-ext-id-btn">Save & Connect</button>
+          </div>
+          <div id="ext-status" style="font-size:12px;color:var(--muted)">Not connected</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <div class="settings-title">Danger Zone</div>
         <div class="setting-row">
           <div class="setting-info">
@@ -1024,6 +1044,44 @@ const app      = initializeApp(firebaseConfig);
 const auth     = getAuth(app);
 const db       = getFirestore(app);
 const provider = new GoogleAuthProvider();
+
+// ── Extension Bridge ───────────────────────────────────────────────
+// Users paste their extension ID here (from chrome://extensions)
+// We save it to localStorage so they only need to do it once
+let EXTENSION_ID = localStorage.getItem("sb_ext_id") || "";
+
+async function sendTokenToExtension(user, idToken) {
+  if (!EXTENSION_ID) return;
+  try {
+    const resp = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        EXTENSION_ID,
+        { type: "SB_AUTH_TOKEN", idToken, uid: user.uid, email: user.email, displayName: user.displayName },
+        (response) => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve(response);
+        }
+      );
+    });
+    console.log("Token sent to extension:", resp);
+    toast("✓ Extension connected! Syncing sessions...", "success");
+    setTimeout(() => syncDown(), 2000); // pull synced sessions after extension pushes
+  } catch(e) {
+    console.warn("Could not reach extension:", e.message);
+    // Extension might not be installed or ID is wrong — don't show error
+  }
+}
+
+async function pingExtension() {
+  if (!EXTENSION_ID) return false;
+  return new Promise(resolve => {
+    try {
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: "SB_PING" }, (r) => {
+        resolve(!chrome.runtime.lastError && r && r.pong);
+      });
+    } catch { resolve(false); }
+  });
+}
 
 // ── State ──────────────────────────────────────────────────────────
 let currentUser  = null;
@@ -1213,6 +1271,12 @@ onAuthStateChanged(auth, async (user) => {
     sessions = lsLoad(); // Load local first for instant render
     showApp(user);
     await syncDown();    // Then pull from cloud
+
+    // Send auth token to extension so it can sync sessions to Firestore
+    try {
+      const idToken = await user.getIdToken();
+      await sendTokenToExtension(user, idToken);
+    } catch(e) { console.warn("Token bridge:", e.message); }
   }
 });
 
@@ -1526,6 +1590,51 @@ document.getElementById("toggle-local-backup").onclick = () => {
   settingsSave(settings_state);
   applySettings();
 };
+
+// Extension ID save & connect
+document.getElementById("ext-id-input").value = EXTENSION_ID;
+document.getElementById("save-ext-id-btn").onclick = async () => {
+  const val = document.getElementById("ext-id-input").value.trim();
+  if (!val) { toast("Enter an extension ID first", "error"); return; }
+  EXTENSION_ID = val;
+  localStorage.setItem("sb_ext_id", val);
+
+  const status = document.getElementById("ext-status");
+  status.textContent = "Testing connection...";
+  status.style.color = "var(--muted)";
+
+  const ok = await pingExtension();
+  if (ok) {
+    status.textContent = "✓ Connected! Extension found.";
+    status.style.color = "var(--accent3)";
+    toast("Extension connected!", "success");
+    // Send token right now if we're signed in
+    if (currentUser) {
+      try {
+        const idToken = await currentUser.getIdToken();
+        await sendTokenToExtension(currentUser, idToken);
+      } catch(e) {}
+    }
+  } else {
+    status.textContent = "✗ Could not reach extension. Check the ID and try again.";
+    status.style.color = "var(--accent2)";
+    toast("Could not reach extension — check the ID", "error");
+  }
+};
+
+// On load, show current connection status
+if (EXTENSION_ID) {
+  document.getElementById("ext-id-input").value = EXTENSION_ID;
+  pingExtension().then(ok => {
+    const status = document.getElementById("ext-status");
+    if (ok) {
+      status.textContent = "✓ Connected";
+      status.style.color = "var(--accent3)";
+    } else {
+      status.textContent = "Not reachable (extension may be reloading)";
+    }
+  });
+}
 
 document.getElementById("delete-all-btn").onclick = async () => {
   if (!confirm("Delete ALL sessions? This cannot be undone.")) return;
