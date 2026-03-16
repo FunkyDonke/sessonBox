@@ -1351,42 +1351,42 @@ async function signOutUser() {
 }
 
 onAuthStateChanged(auth, async (user) => {
-  // If guest, try to load sessions from extension via localStorage bridge key
-  if (!user) {
-    const extKey = "sb2_db_users___private_sessions__meta";
-    try {
-      const extData = localStorage.getItem(extKey);
-      if (extData) {
-        const parsed = JSON.parse(extData);
-        if (parsed && typeof parsed === "object") {
-          // Extension wrote sessions here via shim local storage
-          const extSessions = Object.values(parsed).filter(s => s && s.name);
-          if (extSessions.length > 0) {
-            sessions = extSessions;
-          }
-        }
-      }
-    } catch {}
+  if (!user) { showAuth(); return; }
+
+  // ── Auto-sync on every login — no manual steps needed ──────────
+  currentUser = user;
+  sessions = lsLoad();
+  showApp(user);
+
+  // Get fresh token
+  let idToken;
+  try { idToken = await user.getIdToken(true); } catch(e) { idToken = await user.getIdToken(); }
+
+  // Auto-send token to extension → extension pulls Firestore sessions automatically
+  if (EXTENSION_ID) {
+    sendTokenToExtension(user, idToken).catch(e => console.warn("[Auto-sync]", e.message));
   }
 
-  if (user) {
-    currentUser = user;
-    sessions = lsLoad(); // Load local first for instant render
-    showApp(user);
-    await syncDown();    // Then pull from cloud
+  // Load dashboard display from Firestore + extension
+  await syncDown();
 
-    // Send auth token to extension so it can sync sessions to Firestore
+  // Periodic auto-refresh every 30 seconds (keeps multiple browsers in sync)
+  if (window._syncInterval) clearInterval(window._syncInterval);
+  window._syncInterval = setInterval(async () => {
+    if (!currentUser) { clearInterval(window._syncInterval); return; }
     try {
-      const idToken = await user.getIdToken();
-      await sendTokenToExtension(user, idToken);
-    } catch(e) { console.warn("Token bridge:", e.message); }
-  }
+      const freshToken = await currentUser.getIdToken();
+      if (EXTENSION_ID) sendTokenToExtension(currentUser, freshToken).catch(()=>{});
+      await syncDown();
+    } catch(e) {}
+  }, 30000);
 });
 
 // ── UI Switching ───────────────────────────────────────────────────
 function showAuth() {
   document.getElementById("auth-screen").style.display = "flex";
   document.getElementById("app-screen").style.display = "none";
+  if (window._syncInterval) { clearInterval(window._syncInterval); window._syncInterval = null; }
 }
 
 function showApp(user) {
@@ -1597,6 +1597,13 @@ window.deleteSession = async (id) => {
 // ── Sync Now button ────────────────────────────────────────────────
 document.getElementById("sync-now-btn").onclick = async () => {
   if (!currentUser) { toast("Sign in to sync", "error"); return; }
+  // Send fresh token to extension so it pulls cloud sessions
+  if (EXTENSION_ID) {
+    try {
+      const idToken = await currentUser.getIdToken(true); // force refresh
+      await sendTokenToExtension(currentUser, idToken);
+    } catch(e) { console.warn("Token refresh:", e.message); }
+  }
   await syncDown();
 };
 
