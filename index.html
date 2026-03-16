@@ -959,8 +959,10 @@
               style="flex:1;font-family:monospace;font-size:12px"
               value="" />
             <button class="btn btn-primary" id="save-ext-id-btn">Save & Connect</button>
+            <button class="btn btn-ghost" id="debug-ext-btn" title="Show raw extension data">🔍 Debug</button>
           </div>
           <div id="ext-status" style="font-size:12px;color:var(--muted)">Not connected</div>
+          <pre id="ext-debug-out" style="display:none;margin-top:8px;background:#0a0a0f;border:1px solid #1e1e2e;border-radius:8px;padding:12px;font-size:11px;color:#43e97b;overflow-x:auto;white-space:pre-wrap;max-height:200px;overflow-y:auto"></pre>
         </div>
       </div>
 
@@ -1064,11 +1066,19 @@ async function sendTokenToExtension(user, idToken) {
       );
     });
     console.log("Token sent to extension:", resp);
-    toast("✓ Extension connected! Syncing sessions...", "success");
-    setTimeout(() => syncDown(), 2000); // pull synced sessions after extension pushes
+    toast("✓ Extension connected! Pulling sessions...", "success");
+    // Pull sessions from extension directly (dashboard writes to Firestore)
+    setTimeout(async () => {
+      const pulled = await pullSessionsFromExtension();
+      if (pulled > 0) {
+        toast(`✓ Synced ${pulled} session${pulled>1?"s":""} from extension!`, "success");
+        await syncDown();
+      } else {
+        toast("Extension connected. Create sessions in the extension to sync.", "success");
+      }
+    }, 1000);
   } catch(e) {
     console.warn("Could not reach extension:", e.message);
-    // Extension might not be installed or ID is wrong — don't show error
   }
 }
 
@@ -1080,6 +1090,45 @@ async function pingExtension() {
         resolve(!chrome.runtime.lastError && r && r.pong);
       });
     } catch { resolve(false); }
+  });
+}
+
+// Pull sessions directly from the extension and save to Firestore
+async function pullSessionsFromExtension() {
+  if (!EXTENSION_ID || !currentUser) return 0;
+  return new Promise(resolve => {
+    try {
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: "SB_GET_SESSIONS" }, async (resp) => {
+        if (chrome.runtime.lastError || !resp) {
+          console.warn("[Dashboard] pullSessions error:", chrome.runtime.lastError?.message);
+          resolve(0);
+          return;
+        }
+        const extSessions = resp.sessions || [];
+        console.log("[Dashboard] Got", extSessions.length, "sessions from extension");
+        if (extSessions.length === 0) { resolve(0); return; }
+
+        // Write each session to Firestore (dashboard is authenticated, so this works)
+        let saved = 0;
+        for (const s of extSessions) {
+          if (!s.id) continue;
+          try {
+            await setDoc(doc(db, "users", currentUser.uid, "sessions", s.id), {
+              ...s,
+              syncedAt: serverTimestamp(),
+            });
+            saved++;
+          } catch(e) {
+            console.warn("[Dashboard] Failed to save session:", s.name, e.message);
+          }
+        }
+        console.log("[Dashboard] Saved", saved, "sessions to Firestore");
+        resolve(saved);
+      });
+    } catch(e) {
+      console.warn("[Dashboard] pullSessionsFromExtension error:", e);
+      resolve(0);
+    }
   });
 }
 
@@ -1180,8 +1229,14 @@ async function fsDeleteAll(uid) {
 async function syncDown() {
   if (!currentUser) return;
   try {
+    // First: pull sessions from extension and write to Firestore
+    if (EXTENSION_ID) {
+      const pulled = await pullSessionsFromExtension();
+      if (pulled > 0) console.log("[Dashboard] Pulled", pulled, "sessions from extension");
+    }
+
+    // Then: read all sessions from Firestore
     const cloud = await fsGetSessions(currentUser.uid);
-    // Merge: cloud is source of truth; keep local-only sessions
     const localOnly = sessions.filter(s => s.storage === "local");
     sessions = [...cloud, ...localOnly.filter(lo => !cloud.find(c => c.id === lo.id))];
     if (settings_state.localBackup) lsSave(sessions);
@@ -1609,6 +1664,28 @@ document.getElementById("save-ext-id-btn").onclick = async () => {
     status.textContent = "✗ Could not reach extension. Check the ID and try again.";
     status.style.color = "var(--accent2)";
     toast("Could not reach extension — check the ID", "error");
+  }
+};
+
+// Debug button: show raw data from extension
+document.getElementById("debug-ext-btn").onclick = () => {
+  const out = document.getElementById("ext-debug-out");
+  out.style.display = "block";
+  out.textContent = "Querying extension...";
+  if (!EXTENSION_ID) { out.textContent = "No extension ID saved."; return; }
+  try {
+    chrome.runtime.sendMessage(EXTENSION_ID, { type: "SB_GET_SESSIONS" }, (resp) => {
+      if (chrome.runtime.lastError) {
+        out.textContent = "ERROR: " + chrome.runtime.lastError.message;
+        out.style.color = "var(--accent2)";
+        return;
+      }
+      out.style.color = "#43e97b";
+      out.textContent = JSON.stringify(resp, null, 2);
+    });
+  } catch(e) {
+    out.textContent = "Exception: " + e.message;
+    out.style.color = "var(--accent2)";
   }
 };
 
