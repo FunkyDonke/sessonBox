@@ -1175,14 +1175,12 @@ async function fsGetSessions(uid) {
   const results = [];
   const seenIds = new Set();
 
-  // Read sessions written by both dashboard and extension
-  // Extension writes to: users/{uid}/sessions/{sessionId}  (via syncSessionToDashboard)
-  // Dashboard writes to: users/{uid}/sessions/{sessionId}
   try {
+    console.log("[Dashboard] fsGetSessions: reading users/" + uid + "/sessions");
     const snap = await getDocs(collection(db, "users", uid, "sessions"));
+    console.log("[Dashboard] fsGetSessions: got", snap.docs.length, "docs");
     snap.docs.forEach(d => {
       const data = d.data();
-      // Handle both flat format (extension) and wrapped _v format (old shim)
       const session = (data._v && typeof data._v === "object") ? data._v : data;
       const sid = session.id || d.id;
       if (sid && !seenIds.has(sid)) {
@@ -1190,8 +1188,10 @@ async function fsGetSessions(uid) {
         results.push({ id: sid, ...session });
       }
     });
-    console.log("[Dashboard] Loaded", results.length, "sessions from Firestore");
-  } catch(e) { console.warn("Firestore read failed:", e.message); }
+  } catch(e) {
+    console.error("[Dashboard] Firestore read error:", e.code, e.message);
+    throw e; // re-throw so syncDown can show error toast
+  }
 
   return results;
 }
@@ -1236,30 +1236,56 @@ async function syncDown() {
         updateLastSync();
         toast("✓ Synced " + extSessions.length + " session" + (extSessions.length > 1 ? "s" : "") + " from extension", "success");
 
-        // Step 2: Also write to Firestore in background (for persistence)
+        // Step 2: Write to Firestore so OTHER devices can read sessions
+        let fsWriteCount = 0;
+        let fsWriteError = null;
         for (const s of extSessions) {
           if (!s.id) continue;
           try {
             await setDoc(doc(db, "users", currentUser.uid, "sessions", s.id), {
-              ...s, syncedAt: serverTimestamp()
+              id: s.id,
+              name: s.name || "Session",
+              color: s.color || "#6c63ff",
+              icon: s.icon || "box",
+              site: s.site || "",
+              launchUrl: s.launchUrl || "",
+              isLocal: false,
+              group: s.group || "Group 1",
+              version: s.version || 2,
+              storage: "synced",
+              syncedAt: serverTimestamp(),
+              updatedAt: s.updatedAt || new Date().toISOString()
             });
+            fsWriteCount++;
           } catch(fe) {
+            fsWriteError = fe.message;
             console.warn("[Dashboard] Firestore write failed for:", s.name, fe.message);
           }
+        }
+        if (fsWriteError) {
+          toast("⚠ Cloud save failed: " + fsWriteError.slice(0,60), "error");
+        } else if (fsWriteCount > 0) {
+          console.log("[Dashboard] Saved", fsWriteCount, "sessions to Firestore ✓");
         }
         return;
       }
     }
 
     // Step 3: No extension or no sessions from extension — read from Firestore
+    console.log("[Dashboard] Reading sessions from Firestore for uid:", currentUser.uid);
     const cloud = await fsGetSessions(currentUser.uid);
+    console.log("[Dashboard] Firestore returned", cloud.length, "sessions");
     const localOnly = sessions.filter(s => s.storage === "local");
     sessions = [...cloud, ...localOnly.filter(lo => !cloud.find(c => c.id === lo.id))];
     if (settings_state.localBackup) lsSave(sessions);
     updateStats();
     renderSessions();
     updateLastSync();
-    toast("✓ Synced from cloud", "success");
+    if (cloud.length > 0) {
+      toast("✓ Synced " + cloud.length + " session" + (cloud.length > 1 ? "s" : "") + " from cloud", "success");
+    } else {
+      toast("✓ Synced from cloud (no sessions saved yet)", "success");
+    }
   } catch (e) {
     if (e.message && e.message.includes("permissions")) {
       toast("⚠ Firestore rules not set. See README for setup.", "error");
