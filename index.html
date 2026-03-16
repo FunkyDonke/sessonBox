@@ -1132,33 +1132,23 @@ async function fsGetSessions(uid) {
   const results = [];
   const seenIds = new Set();
 
-  // Read dashboard-native path
+  // Read sessions written by both dashboard and extension
+  // Extension writes to: users/{uid}/sessions/{sessionId}  (via syncSessionToDashboard)
+  // Dashboard writes to: users/{uid}/sessions/{sessionId}
   try {
     const snap = await getDocs(collection(db, "users", uid, "sessions"));
     snap.docs.forEach(d => {
       const data = d.data();
-      const session = data._v || data; // shim wraps in _v
-      if (!seenIds.has(session.id || d.id)) {
-        seenIds.add(session.id || d.id);
-        results.push({ id: session.id || d.id, ...session });
-      }
-    });
-  } catch(e) { console.warn("Dashboard path read failed:", e.message); }
-
-  // Read extension shim path: collection name = "sb_users_UID_private_sessions"
-  const shimColl = `sb_users_${uid}_private_sessions`;
-  try {
-    const snap2 = await getDocs(collection(db, shimColl));
-    snap2.docs.forEach(d => {
-      const data = d.data();
-      const session = data._v || data;
+      // Handle both flat format (extension) and wrapped _v format (old shim)
+      const session = (data._v && typeof data._v === "object") ? data._v : data;
       const sid = session.id || d.id;
-      if (session && session.name && !seenIds.has(sid)) {
+      if (sid && !seenIds.has(sid)) {
         seenIds.add(sid);
         results.push({ id: sid, ...session });
       }
     });
-  } catch(e) { console.warn("Shim path read failed:", e.message); }
+    console.log("[Dashboard] Loaded", results.length, "sessions from Firestore");
+  } catch(e) { console.warn("Firestore read failed:", e.message); }
 
   return results;
 }
