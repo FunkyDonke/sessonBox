@@ -1067,16 +1067,10 @@ async function sendTokenToExtension(user, idToken) {
     });
     console.log("Token sent to extension:", resp);
     toast("✓ Extension connected! Pulling sessions...", "success");
-    // Pull sessions from extension directly (dashboard writes to Firestore)
+    // Pull sessions from extension immediately after connecting
     setTimeout(async () => {
-      const pulled = await pullSessionsFromExtension();
-      if (pulled > 0) {
-        toast(`✓ Synced ${pulled} session${pulled>1?"s":""} from extension!`, "success");
-        await syncDown();
-      } else {
-        toast("Extension connected. Create sessions in the extension to sync.", "success");
-      }
-    }, 1000);
+      await syncDown();
+    }, 800);
   } catch(e) {
     console.warn("Could not reach extension:", e.message);
   }
@@ -1229,13 +1223,35 @@ async function fsDeleteAll(uid) {
 async function syncDown() {
   if (!currentUser) return;
   try {
-    // First: pull sessions from extension and write to Firestore
+    // Step 1: Pull sessions directly from extension (immediate display)
     if (EXTENSION_ID) {
-      const pulled = await pullSessionsFromExtension();
-      if (pulled > 0) console.log("[Dashboard] Pulled", pulled, "sessions from extension");
+      const extSessions = await getSessionsFromExtension();
+      if (extSessions.length > 0) {
+        console.log("[Dashboard] Got", extSessions.length, "sessions from extension — displaying immediately");
+        const localOnly = sessions.filter(s => s.storage === "local");
+        sessions = [...extSessions, ...localOnly.filter(lo => !extSessions.find(e => e.id === lo.id))];
+        if (settings_state.localBackup) lsSave(sessions);
+        updateStats();
+        renderSessions();
+        updateLastSync();
+        toast("✓ Synced " + extSessions.length + " session" + (extSessions.length > 1 ? "s" : "") + " from extension", "success");
+
+        // Step 2: Also write to Firestore in background (for persistence)
+        for (const s of extSessions) {
+          if (!s.id) continue;
+          try {
+            await setDoc(doc(db, "users", currentUser.uid, "sessions", s.id), {
+              ...s, syncedAt: serverTimestamp()
+            });
+          } catch(fe) {
+            console.warn("[Dashboard] Firestore write failed for:", s.name, fe.message);
+          }
+        }
+        return;
+      }
     }
 
-    // Then: read all sessions from Firestore
+    // Step 3: No extension or no sessions from extension — read from Firestore
     const cloud = await fsGetSessions(currentUser.uid);
     const localOnly = sessions.filter(s => s.storage === "local");
     sessions = [...cloud, ...localOnly.filter(lo => !cloud.find(c => c.id === lo.id))];
@@ -1251,6 +1267,22 @@ async function syncDown() {
       toast("Sync failed: " + e.message, "error");
     }
   }
+}
+
+// Get sessions directly from extension (returns array, never throws)
+async function getSessionsFromExtension() {
+  if (!EXTENSION_ID) return [];
+  return new Promise(resolve => {
+    try {
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: "SB_GET_SESSIONS" }, (resp) => {
+        if (chrome.runtime.lastError || !resp) {
+          resolve([]);
+          return;
+        }
+        resolve(resp.sessions || []);
+      });
+    } catch(e) { resolve([]); }
+  });
 }
 
 async function syncUp(session) {
