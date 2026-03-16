@@ -1048,9 +1048,23 @@ const db       = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
 // ── Extension Bridge ───────────────────────────────────────────────
-// Users paste their extension ID here (from chrome://extensions)
-// We save it to localStorage so they only need to do it once
+// Extension ID — auto-detected from URL ?ext= parameter when opened from extension
+// OR manually saved by user in Settings
 let EXTENSION_ID = localStorage.getItem("sb_ext_id") || "";
+
+// Auto-detect extension ID from URL parameter (set when opened from extension)
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const extFromUrl = params.get("ext");
+  if (extFromUrl && extFromUrl.length > 20) {
+    EXTENSION_ID = extFromUrl;
+    localStorage.setItem("sb_ext_id", extFromUrl);
+    console.log("[Dashboard] Auto-detected extension ID from URL:", extFromUrl);
+    // Clean URL without reloading
+    const clean = window.location.pathname;
+    window.history.replaceState({}, "", clean);
+  }
+})();
 
 async function sendTokenToExtension(user, idToken) {
   if (!EXTENSION_ID) return;
